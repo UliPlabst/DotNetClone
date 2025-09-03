@@ -18,16 +18,18 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
     static MethodInfo _addReferenceMethod = typeof(DeepCloneContext).GetMethod(nameof(DeepCloneContext.AddReference), BindingFlags.Public | BindingFlags.Instance)
         ?? throw new InvalidOperationException("AddReference method not found in DeepCloneContext");
 
-    private Func<T, DeepCloneSettings, DeepCloneContext, T>? _cloneFunc;
+    private Func<T, DeepCloneSettings, DeepCloneContext, T>? _deepCloneFunc;
+    private Func<T, DeepCloneSettings, DeepCloneContext, T>? _shallowCloneFunc;
     private DeepCloneSettings _settings;
 
     public DefaultObjectCloneContract(DeepCloneSettings settings)
     {
         _settings = settings;
-        CreateContract();
+        CreateDeepCloneFunc();
+        CreateShallowCloneFunc();
     }
 
-    private void CreateContract()
+    private void CreateDeepCloneFunc()
     {
         var constructor = _settings.ResolveConstructor.Invoke(Type);
         //use system.linq.expressions to create a new and a member init expression
@@ -44,7 +46,10 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
         var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
         foreach (var prop in Type.GetProperties(bindingFlags)
-            .Where(e => e.CanRead && e.CanWrite && _settings.ShouldCloneMember(e))
+            .Where(e => e.CanRead 
+                && e.CanWrite 
+                && !e.GetIndexParameters().Any()
+                && _settings.ShouldCloneMember(e))
         )
         {
             if (prop.HasAttribute<CloneIgnoreAttribute>())
@@ -144,9 +149,61 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
             settingsParameter,
             contextParameter
         );
-        _cloneFunc = lambda.Compile();
+        _deepCloneFunc = lambda.Compile();
+    }
+    
+    private void CreateShallowCloneFunc()
+    {
+        var constructor = _settings.ResolveConstructor.Invoke(Type);
+        //use system.linq.expressions to create a new and a member init expression
+
+        var sourceParameter = Expression.Parameter(Type, "source");
+        var settingsParameter = Expression.Parameter(typeof(DeepCloneSettings), "settings");
+        var contextParameter = Expression.Parameter(typeof(DeepCloneContext), "context");
+
+        var blockExpressions = new List<Expression>();
+        var newExpression = Expression.New(constructor);
+        var bindings = new List<MemberBinding>();
+
+        var membersToClone = new List<MemberInfo>();
+        var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+        foreach (var prop in Type.GetProperties(bindingFlags)
+            .Where(e => e.CanRead 
+                && e.CanWrite 
+                && !e.GetIndexParameters().Any()
+                && _settings.ShouldCloneMember(e))
+        )
+        {
+            if (prop.HasAttribute<CloneIgnoreAttribute>())
+                continue;
+            var value = Expression.Property(sourceParameter, prop);
+            var binding = Expression.Bind(prop, value);
+            bindings.Add(binding);
+        }
+
+        foreach (var field in Type.GetFields(bindingFlags)
+            .Where(e => _settings.ShouldCloneMember.Invoke(e))
+        )
+        {
+            var value = Expression.Field(sourceParameter, field);
+            var binding = Expression.Bind(field, value);
+            bindings.Add(binding);
+        }
+
+        var memberInit = Expression.MemberInit(newExpression, bindings);
+        var lambda = Expression.Lambda<Func<T, DeepCloneSettings, DeepCloneContext, T>>(
+            memberInit,
+            sourceParameter,
+            settingsParameter,
+            contextParameter
+        );
+        _shallowCloneFunc = lambda.Compile();
     }
 
-    public T Clone(T source, DeepCloneSettings settings, DeepCloneContext context)
-        => _cloneFunc!.Invoke(source, settings, context);
+    public T DeepClone(T source, DeepCloneSettings settings, DeepCloneContext context)
+        => _deepCloneFunc!.Invoke(source, settings, context);
+        
+    public T ShallowClone(T source, DeepCloneSettings settings, DeepCloneContext context)
+        => _shallowCloneFunc!.Invoke(source, settings, context);
 }

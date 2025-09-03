@@ -5,7 +5,7 @@ public class CollectionCloneContract<T, TElement>()
 {
     public Type Type => typeof(T);
 
-    public T Clone(T source, DeepCloneSettings settings, DeepCloneContext context)
+    public T DeepClone(T source, DeepCloneSettings settings, DeepCloneContext context)
     {
         var clone = new T();
         context.AddReference(source, clone);
@@ -16,6 +16,17 @@ public class CollectionCloneContract<T, TElement>()
                 ? item
                 : DotNetCloner.DeepCloneInternal(item, settings, context);
             clone.Add(element);
+        }
+        return clone;
+    }
+    
+    public T ShallowClone(T source, DeepCloneSettings settings, DeepCloneContext context)
+    {
+        var clone = new T();
+        context.AddReference(source, clone);
+        foreach (var item in source)
+        {
+            clone.Add(item);
         }
         return clone;
     }

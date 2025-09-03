@@ -93,13 +93,15 @@ public class DeepCloneSettings
 
 public static class DotNetCloner
 {
+    public static DeepCloneSettings DefaultSettings { get; set; } = new DeepCloneSettingsBuilder().Build();
+        
     public static T DeepClone<T>(T source, DeepCloneSettings? settings = null)
     {
-        settings ??= new DeepCloneSettingsBuilder().Build();
+        settings ??= DefaultSettings;
         var context = new DeepCloneContext();
         return DeepCloneInternal(source, settings, context);
     }
-
+    
     internal static T DeepCloneInternal<T>(T source, DeepCloneSettings settings, DeepCloneContext context)
     {
         if(source == null)
@@ -109,8 +111,29 @@ public static class DotNetCloner
         var contract = settings.ContractResolver.ResolveContract(typeof(T));
         return contract switch
         {
-            ICloneContract<T> cloneContract => cloneContract.Clone(source, settings, context),
-            ICloneContract genericContract => (T)genericContract.Clone(source, settings, context)
+            ICloneContract<T> cloneContract => cloneContract.DeepClone(source, settings, context),
+            ICloneContract genericContract => (T)genericContract.DeepClone(source, settings, context)
+        };
+    }
+    
+    public static T ShallowClone<T>(T source, DeepCloneSettings? settings = null)
+    {
+        settings ??= DefaultSettings;
+        var context = new DeepCloneContext();
+        return ShallowCloneInternal(source, settings, context);
+    }
+    
+    internal static T ShallowCloneInternal<T>(T source, DeepCloneSettings settings, DeepCloneContext context)
+    {
+        if(source == null)
+            return default!;
+        if (context.TryResolveReference(source, out var existingClone))
+            return existingClone!;
+        var contract = settings.ContractResolver.ResolveContract(typeof(T));
+        return contract switch
+        {
+            ICloneContract<T> cloneContract => cloneContract.ShallowClone(source, settings, context),
+            ICloneContract genericContract => (T)genericContract.ShallowClone(source, settings, context)
         };
     }
 }

@@ -7,7 +7,7 @@ public class ObjectDictionaryCloneContract<T, TKey, TValue>(
 {
     public Type Type => typeof(T);
 
-    public T Clone(T source, DeepCloneSettings settings, DeepCloneContext context)
+    public T DeepClone(T source, DeepCloneSettings settings, DeepCloneContext context)
     {
         var clone = new T();
         context.AddReference(source, clone);
@@ -20,6 +20,17 @@ public class ObjectDictionaryCloneContract<T, TKey, TValue>(
                 ? srcvalue
                 : DotNetCloner.DeepCloneInternal(srcvalue, settings, context);
             clone.Add(key, value);
+        }
+        return clone;
+    }
+    
+    public T ShallowClone(T source, DeepCloneSettings settings, DeepCloneContext context)
+    {
+        var clone = new T();
+        context.AddReference(source, clone);
+        foreach (var (srckey, srcvalue) in source)
+        {
+            clone.Add(srckey, srcvalue);
         }
         return clone;
     }

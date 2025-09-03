@@ -4,7 +4,7 @@ public class ArrayCloneContract<T>() : ICloneContract<T[]>
 {
     public Type Type => typeof(T);
 
-    public T[] Clone(T[] source, DeepCloneSettings settings, DeepCloneContext context)
+    public T[] DeepClone(T[] source, DeepCloneSettings settings, DeepCloneContext context)
     {
         var clone = new T[source.Length];
         context.AddReference(source, clone);
@@ -15,6 +15,14 @@ public class ArrayCloneContract<T>() : ICloneContract<T[]>
                 ? source[i]
                 : DotNetCloner.DeepCloneInternal(source[i], settings, context);
         }
+        return clone;
+    }
+    
+    public T[] ShallowClone(T[] source, DeepCloneSettings settings, DeepCloneContext context)
+    {
+        var clone = new T[source.Length];
+        Array.Copy(source, clone, source.Length);
+        context.AddReference(source, clone);
         return clone;
     }
 }

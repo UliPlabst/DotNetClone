@@ -20,6 +20,8 @@ public class DefaultCloneContractFactory : ICloneContractFactory
             return CreateArrayContract(type);
         if (type.IsInterface || type.IsAbstract)
             return CreateReflectionDelegationCloneContract(type);
+        if(type.IsValueType)
+            return CreateValueTypeCloneContract(type);
         if (type.TryGetGenericTypeImplementation(typeof(IDictionary<,>), out var implementingType))
             return CreateDictionaryContract(type, implementingType, settings);
         if(type.TryGetGenericTypeImplementation(typeof(ICollection<>), out implementingType))
@@ -27,7 +29,7 @@ public class DefaultCloneContractFactory : ICloneContractFactory
         return CreateDefaultObjectCloneContract(type, settings);
     }
     
-    ICloneContract CreateCollectionContract(Type type, Type implementingType)
+    static ICloneContract CreateCollectionContract(Type type, Type implementingType)
     {
         var elementType = implementingType.GetGenericArguments()[0];
         var collectionCloneContractType = typeof(CollectionCloneContract<,>)
@@ -35,13 +37,13 @@ public class DefaultCloneContractFactory : ICloneContractFactory
         return (ICloneContract)Activator.CreateInstance(collectionCloneContractType)!;
     }
     
-    ICloneContract CreateArrayContract(Type type)
+    static ICloneContract CreateArrayContract(Type type)
     {
         var arrayCloneContractType = typeof(ArrayCloneContract<>).MakeGenericType(type.GetElementType()!);
         return (ICloneContract)Activator.CreateInstance(arrayCloneContractType)!;
     }
 
-    ICloneContract CreateDictionaryContract(Type type, Type implementingType, DeepCloneSettings settings)
+    static ICloneContract CreateDictionaryContract(Type type, Type implementingType, DeepCloneSettings settings)
     {
         var genericArgs = implementingType.GetGenericArguments();
         var keyType = genericArgs[0];
@@ -56,13 +58,19 @@ public class DefaultCloneContractFactory : ICloneContractFactory
         ])!;
     }
     
-    ICloneContract CreateReflectionDelegationCloneContract(Type type)
+    static ICloneContract CreateValueTypeCloneContract(Type type)
+    {
+        var contractType = typeof(ValueTypeCloneContract<>).MakeGenericType(type);
+        return (ICloneContract)Activator.CreateInstance(contractType)!;
+    }
+    
+    static ICloneContract CreateReflectionDelegationCloneContract(Type type)
     {
         var contractType = typeof(ReflectionDelegationCloneContract<>).MakeGenericType(type);
         return (ICloneContract)Activator.CreateInstance(contractType)!;
     }
 
-    ICloneContract CreateDefaultObjectCloneContract(Type type, DeepCloneSettings settings)
+    static ICloneContract CreateDefaultObjectCloneContract(Type type, DeepCloneSettings settings)
     {
         var contractType = typeof(DefaultObjectCloneContract<>).MakeGenericType(type);
         return (ICloneContract)Activator.CreateInstance(contractType, [settings])!;

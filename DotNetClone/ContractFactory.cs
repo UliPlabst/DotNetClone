@@ -20,7 +20,7 @@ public class DefaultCloneContractFactory : ICloneContractFactory
             return CreateArrayContract(type);
         if (type.IsInterface || type.IsAbstract)
             return CreateReflectionDelegationCloneContract(type);
-        if(type.IsValueType)
+        if(settings.IsPrimitive(type))
             return CreateValueTypeCloneContract(type);
         if (type.TryGetGenericTypeImplementation(typeof(IDictionary<,>), out var implementingType))
             return CreateDictionaryContract(type, implementingType, settings);

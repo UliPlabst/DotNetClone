@@ -9,7 +9,7 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
-      "program": "${workspaceFolder}/DotNetClone/bin/Debug/net8.0/DotNetClone.dll",
+      "program": "${workspaceFolder}/DotNetClone/bin/Debug/net10.0/DotNetClone.dll",
       "args": [],
       "cwd": "${workspaceFolder}/DotNetClone",
       "console": "internalConsole",

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="DotNetClone.Debug/DotNetClone.Debug.csproj" />
+  <Project Path="DotNetClone.Tests/DotNetClone.Tests.csproj" />
+  <Project Path="DotNetClone/DotNetClone.csproj" />
+</Solution>

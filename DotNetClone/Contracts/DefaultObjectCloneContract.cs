@@ -32,18 +32,25 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
     private void CreateDeepCloneFunc()
     {
         var constructor = _settings.ResolveConstructor.Invoke(Type);
-        //use system.linq.expressions to create a new and a member init expression
 
         var sourceParameter = Expression.Parameter(Type, "source");
         var settingsParameter = Expression.Parameter(typeof(DeepCloneSettings), "settings");
         var contextParameter = Expression.Parameter(typeof(DeepCloneContext), "context");
+        var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+        var (constructorArguments, constructorPropertyNames) = CreateConstructorArguments(
+            constructor,
+            sourceParameter,
+            settingsParameter,
+            contextParameter,
+            bindingFlags,
+            deepClone: true
+        );
 
         var blockExpressions = new List<Expression>();
-        var newExpression = Expression.New(constructor);
+        var newExpression = Expression.New(constructor, constructorArguments);
         var bindings = new List<MemberBinding>();
 
         var membersToClone = new List<MemberInfo>();
-        var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
         foreach (var prop in Type.GetProperties(bindingFlags)
             .Where(e => e.CanRead 
@@ -52,6 +59,8 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
                 && _settings.ShouldCloneMember(e))
         )
         {
+            if (constructorPropertyNames.Contains(prop.Name))
+                continue;
             if (prop.HasAttribute<CloneIgnoreAttribute>())
                 continue;
             if (_settings.IsPrimitive.Invoke(prop.PropertyType))
@@ -67,7 +76,7 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
         }
 
         foreach (var field in Type.GetFields(bindingFlags)
-            .Where(e => _settings.ShouldCloneMember.Invoke(e))
+            .Where(e => _settings.ShouldCloneMember.Invoke(e) && !e.IsSpecialName)
         )
         {
             if (field.HasAttribute<CloneIgnoreAttribute>())
@@ -155,18 +164,25 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
     private void CreateShallowCloneFunc()
     {
         var constructor = _settings.ResolveConstructor.Invoke(Type);
-        //use system.linq.expressions to create a new and a member init expression
 
         var sourceParameter = Expression.Parameter(Type, "source");
         var settingsParameter = Expression.Parameter(typeof(DeepCloneSettings), "settings");
         var contextParameter = Expression.Parameter(typeof(DeepCloneContext), "context");
+        var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+        var (constructorArguments, constructorPropertyNames) = CreateConstructorArguments(
+            constructor,
+            sourceParameter,
+            settingsParameter,
+            contextParameter,
+            bindingFlags,
+            deepClone: false
+        );
 
         var blockExpressions = new List<Expression>();
-        var newExpression = Expression.New(constructor);
+        var newExpression = Expression.New(constructor, constructorArguments);
         var bindings = new List<MemberBinding>();
 
         var membersToClone = new List<MemberInfo>();
-        var bindingFlags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
         foreach (var prop in Type.GetProperties(bindingFlags)
             .Where(e => e.CanRead 
@@ -175,6 +191,8 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
                 && _settings.ShouldCloneMember(e))
         )
         {
+            if (constructorPropertyNames.Contains(prop.Name))
+                continue;
             if (prop.HasAttribute<CloneIgnoreAttribute>())
                 continue;
             var value = Expression.Property(sourceParameter, prop);
@@ -183,7 +201,7 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
         }
 
         foreach (var field in Type.GetFields(bindingFlags)
-            .Where(e => _settings.ShouldCloneMember.Invoke(e))
+            .Where(e => _settings.ShouldCloneMember.Invoke(e) && !e.IsSpecialName)
         )
         {
             var value = Expression.Field(sourceParameter, field);
@@ -199,6 +217,47 @@ public class DefaultObjectCloneContract<T> : ICloneContract<T>
             contextParameter
         );
         _shallowCloneFunc = lambda.Compile();
+    }
+
+    private (Expression[] Arguments, HashSet<string> PropertyNames) CreateConstructorArguments(
+        ConstructorInfo constructor,
+        ParameterExpression sourceParameter,
+        ParameterExpression settingsParameter,
+        ParameterExpression contextParameter,
+        BindingFlags bindingFlags,
+        bool deepClone
+    )
+    {
+        var parameters = constructor.GetParameters();
+        var constructorPropertyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (parameters.Length == 0)
+            return ([], constructorPropertyNames);
+
+        var properties = Type.GetProperties(bindingFlags)
+            .Where(e => e.CanRead && !e.GetIndexParameters().Any())
+            .DistinctBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(e => e.Name, StringComparer.OrdinalIgnoreCase);
+
+        var arguments = new Expression[parameters.Length];
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            var parameter = parameters[i];
+            if (parameter.Name == null || !properties.TryGetValue(parameter.Name, out var property))
+                throw new InvalidOperationException($"Constructor parameter {Type.Name}.{parameter.Name ?? $"#{i}"} must match a property name");
+
+            var argument = Expression.Property(sourceParameter, property);
+            Expression value = deepClone && !_settings.IsPrimitive.Invoke(property.PropertyType)
+                ? Expression.Call(_cloneMethod.MakeGenericMethod(property.PropertyType), argument, settingsParameter, contextParameter)
+                : argument;
+
+            if (value.Type != parameter.ParameterType)
+                value = Expression.Convert(value, parameter.ParameterType);
+
+            arguments[i] = value;
+            constructorPropertyNames.Add(property.Name);
+        }
+
+        return (arguments, constructorPropertyNames);
     }
 
     public T DeepClone(T source, DeepCloneSettings settings, DeepCloneContext context)

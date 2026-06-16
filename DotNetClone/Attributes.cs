@@ -11,3 +11,9 @@ public class OnClonedAttribute: Attribute
 {
     public OnClonedAttribute() { }
 }
+
+[AttributeUsage(AttributeTargets.Constructor, Inherited = false, AllowMultiple = false)]
+public class CloneConstructorAttribute: Attribute
+{
+    public CloneConstructorAttribute() { }
+}

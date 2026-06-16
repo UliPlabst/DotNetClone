@@ -12,5 +12,6 @@ namespace DotNetClone.Tests
         {
             Assert.Pass();
         }
+
     }
 }

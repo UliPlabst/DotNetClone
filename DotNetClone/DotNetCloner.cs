@@ -51,7 +51,8 @@ public class DeepCloneSettingsBuilder
         = e => e.IsValueType || e == typeof(string);
         
     public Func<Type, ConstructorInfo> ResolveConstructor { get; set; }
-        = e => e.GetConstructor(Type.EmptyTypes)
+        = e => e.GetConstructor(Type.EmptyTypes) 
+            ?? e.GetConstructors().FirstOrDefault(e => e.GetCustomAttribute<CloneConstructorAttribute>() != null)
             ?? throw new InvalidOperationException($"No parameterless constructor found for type {e.FullName}");
             
     public List<ICloneContractFactory> ContractFactories { get; set; } = [];
